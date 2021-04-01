@@ -22,7 +22,7 @@ def construct_ICMP_packet():
 	ping_code = 0x00
 	identifier = os.getpid() & 0xffff
 	sequence = 1
-	data = b'x' * 48
+	data = b'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuv'
 	t = int(time.time())
 	# serialize data with zeroed out checksum field
 	ser = ping_type.to_bytes(1, 'big') + ping_code.to_bytes(1, 'big') + b'\x00\x00' + identifier.to_bytes(2, 'big') + sequence.to_bytes(2, 'big') + t.to_bytes(8, 'little') + data
@@ -37,7 +37,7 @@ def construct_IP_packet(src, dest, icmp):
 	tos = 0x00
 	length = 0x54
 	ident = os.getpid() & 0xffff
-	flags = 0x40
+	flags = 0x00
 	ttl = 0x40 # ttl set to 64
 	protocol = 0x01 # set to IP protocol 1 (ICMP)
 	header_chksm = 0x00 # compute header checksum
